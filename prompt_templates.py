@@ -10,4 +10,4 @@ answers_filtering_template = """Колонка анкети самоаналіз
 
 {cells}"""
 
-assignment_answers_prompt = ChatPromptTemplate(answers_filtering_template)
+assignment_answers_prompt = ChatPromptTemplate.from_template(answers_filtering_template)

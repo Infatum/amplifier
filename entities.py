@@ -2,11 +2,28 @@ from pydantic import BaseModel, Field
 
 
 class Cell(BaseModel):
-    id: int = Field(description=)
-    topic: str = Field(description="Topic")
-    text: str = Field(description="Original text")
-    is_a_question: bool = Field(description="Message type")
+    """One worksheet cell, identified by index rather than by its text.
 
+    Text is deliberately not a field: the caller already holds it. 
+    Asking the model to echo it back corrupts it -- generative models normalise text, 
+    fixing typos and trimming long entries -- and wastes output tokens.
+    """
+
+    id: int = Field(
+        description="The [N] index shown before this cell in the input, copied exactly"
+    )
+    topic: str = Field(
+        description="Short theme label for this cell, 2-4 words, in the source language"
+    )
+    is_a_question: bool = Field(
+        description=(
+            "True if the cell is a question or a filling instruction addressed to the "
+            "candidate -- imperative mood or second person, e.g. 'Перераховуйте все...', "
+            "'Дайте волю...'. False if it is the candidate's own answer -- first person, "
+            "concrete, e.g. 'Люблю будувати...', 'Розробив...'. Position is not a "
+            "reliable signal: some columns open with an instruction, others with an answer."
+        )
+    )
 
 
 class Questions(BaseModel):
