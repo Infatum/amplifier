@@ -1,20 +1,12 @@
+from knowledge_base.connector import connect, chromadb, embeddings
 from prompt_templates import assignment_answers_prompt
 from langchain_ollama.chat_models import ChatOllama
 from langchain_core.documents import Document
-from langchain_ollama import OllamaEmbeddings
-from langchain_chroma import Chroma
 from entities import Answers
 import pandas as pd
-import chromadb
 import glob
 import os
 
-embeddings = OllamaEmbeddings(model="bge-m3")
-
-
-def connect():
-    chromadb_path = os.environ.get("CHROMADB_STORAGE", "./chroma_db")
-    return chromadb.PersistentClient(path=chromadb_path)
 
 def load_excel_file(filepath: str):
     sheets = {}
@@ -44,7 +36,7 @@ def upload_assignments(folder: str, vector_db_client: chromadb.Client):
 
 
 def store_answers(file: str, name: str, question: str, data: pd.DataFrame, answers: Answers, vector_db: chromadb.Client):
-    collection = vector_db.get_or_create_collection("assignments")
+    collection = vector_db.get_or_create_collection("Assignments")
     ids, documents, metadatas = [], [], []
 
     for cell in answers.column:

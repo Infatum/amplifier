@@ -2,11 +2,8 @@ from pydantic import BaseModel, Field
 
 
 class Cell(BaseModel):
-    """One worksheet cell, identified by index rather than by its text.
-
-    Text is deliberately not a field: the caller already holds it. 
-    Asking the model to echo it back corrupts it -- generative models normalise text, 
-    fixing typos and trimming long entries -- and wastes output tokens.
+    """
+    One worksheet cell, identified by index..
     """
 
     id: int = Field(
