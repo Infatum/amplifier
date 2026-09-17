@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class Cell(BaseModel):
     """
-    One worksheet cell, identified by index..
+    One worksheet cell, identified by index.
     """
 
     id: int = Field(
