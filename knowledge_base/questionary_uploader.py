@@ -1,4 +1,3 @@
-
 from knowledge_base.connector import connect, embeddings
 from prompt_templates import assignment_answers_prompt
 from langchain_ollama.chat_models import ChatOllama
@@ -7,6 +6,7 @@ from langchain_chroma import Chroma
 from entities import Answers
 import pandas as pd
 import glob
+import uuid
 import os
 
 
@@ -35,21 +35,22 @@ def filter_answers(question: str, column: pd.Series, model: str, temperature=0.)
     return answers
 
 
-def upload_assignments(folder: str, model: str, store: Chroma):
+def insert_assignments(candidate_id: uuid.UUID, folder: str, model: str):
     file_pattern = os.path.join(folder, "*.xlsx")
     all_excel_files = glob.glob(file_pattern)
+    store = open_store()
+    
     for file in all_excel_files:
         sheets = load_excel_file(file)
         for name, assignment in sheets.items():
             for question in assignment.columns:
                 answers = filter_answers(question, assignment[question], model)
-                store_answers(file, name, question, assignment, answers, store)
+                store_answers(candidate_id, file, name, question, assignment, answers, store)
 
 
 def build_documents(
-    file: str, name: str, question: str, data: pd.DataFrame, answers: Answers
+    candidate_id: uuid.UUID, file: str, name: str, question: str, data: pd.DataFrame, answers: Answers
 ) -> list[Document]:
-    """One Document per answer cell. Text is read locally, never from the model."""
     documents = []
     for cell in answers.column:
         if cell.is_a_question:
@@ -59,20 +60,21 @@ def build_documents(
             Document(
                 page_content=f"Питання: {question}\nВідповідь: {text}",
                 metadata={
+                    "candidate_id": str(candidate_id),
                     "file": os.path.basename(file),
                     "sheet": name,
                     "question": question,
                     "topic": cell.topic,
                 },
-                id=f"{os.path.basename(file)}|{name}|{question}|{cell.id}",
+                id=f"{candidate_id}|{name}|{question}|{cell.id}",
             )
         )
     return documents
 
 
 def store_answers(
-    file: str, name: str, question: str, data: pd.DataFrame, answers: Answers, store: Chroma
+    candidate_id: uuid.UUID, file: str, name: str, question: str, data: pd.DataFrame, answers: Answers, store: Chroma
 ):
-    documents = build_documents(file, name, question, data, answers)
+    documents = build_documents(candidate_id, file, name, question, data, answers)
     if documents:
         store.add_documents(documents)
