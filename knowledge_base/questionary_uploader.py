@@ -82,20 +82,13 @@ def insert_semaphore(candidate_id: uuid.UUID, file: str, name: str, data: pd.Dat
 
 
 def semaphore_answer(semaphor: dict, question: str,  answer: pd.Series):
-    g_elab, y_elab, r_elab = semaphor["green"]["elaboration"], semaphor["yellow"]["elaboration"], semaphor["red"]["elaboration"]
+    contents = []
     colors = {"green": semaphor["green"]["color"], "yellow": semaphor["yellow"]["color"], "red": semaphor["red"]["color"]}
-    contents = (
-        (
-            "green", f"Питання: {question} ({g_elab})", f"Питання: {question}\nВідповідь({g_elab}): {str(answer[colors['green']])}"
-        ),
-        (
-            "yellow", f"Питання: {question} ({y_elab})", f"Питання: {question}\nВідповідь({y_elab}): {str(answer[colors['yellow']])}"
-        ),
-        (
-            "red", f"Питання: {question} ({r_elab})", f"Питання: {question}\nВідповідь({r_elab}): {str(answer[colors['red']])}"
-        ),
-    )
-    return contents
+    for color in ("green", "yellow", "red"):
+        elab = semaphor[color]["elaboration"]
+        content = ( color, f"Питання: {question} ({elab})", f"Питання: {question}\nВідповідь({elab}): {str(answer[colors[color]])}" )
+        contents.append(content)
+    return tuple(contents)
 
 
 def get_semaphore(data: pd.DataFrame):
