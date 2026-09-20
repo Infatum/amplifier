@@ -66,51 +66,50 @@ def build_document(candidate_id: uuid.UUID, cell_id: int, file: str, name: str, 
     )
 
 
-def insert_semafor(candidate_id: uuid.UUID, file: str, name: str, question: str, data: pd.DataFrame) -> list[Document]:
+def insert_semaphore(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFrame) -> list[Document]:
     documents = []
-    answers = []
-    store = open_store("Semafore")
-
-    data = data.set_index(name)
-    answers = data.iloc[2:]
-    semafor = get_semaphore(data)
-    index = 2
+    store = open_store("Semaphore")
+    semaphor = get_semaphore(data)
+    answers = data.drop(columns=[name])
     
-    
-    for question, answer in answers.iterrows():
-        question = str(question)
-        contents = semaphore_answer(semafor, question, answer)
-        for page_content in contents:
-            topic, content = page_content
-            documents.append(build_document(candidate_id, index, file, name, question, topic, content))
+    for i in range(1, len(data)):
+        question = str(data.iloc[i][name])
+        answer = answers.iloc[i][1:]
+        contents = semaphore_answer(semaphor, question, answer)
+        for color, topic, page_content in contents:
+            documents.append(build_document(candidate_id, f"{color}|{i}", file, name, question, topic, page_content))
     store.add_documents(documents)
 
 
 def semaphore_answer(semaphor: dict, question: str,  answer: pd.Series):
-    green_elaboration = answer[semaphor["green"]["elaboration"]]
-    yellow_elaboration = answer[semaphor["yellow"]["elaboration"]]
-    red_elaboration = answer[semaphor["red"]["elaboration"]]
-    namings = {"green": semaphor["green"]["color"], "yellow": semaphor["yellow"]["color"], "red": semaphor["yellow"]["color"]}
-    contents = {
-        {f"Питання: {question}: {green_elaboration}", f"Питання: {question}\nВідповідь: {namings['green']}({green_elaboration})\n{str(answer[namings['green']])}"},
-        {f"Питання: {question}: {yellow_elaboration}", f"Питання: {question}\nВідповідь: {namings['yellow']}({yellow_elaboration})\n{str(answer[namings['yellow']])}"},
-        {f"Питання: {question}: {red_elaboration}", f"Питання: {question}\nВідповідь: {namings['red']}({red_elaboration})\n{str(answer[namings['red']])}"},
-    }
+    g_elab, y_elab, r_elab = semaphor["green"]["elaboration"], semaphor["yellow"]["elaboration"], semaphor["red"]["elaboration"]
+    colors = {"green": semaphor["green"]["color"], "yellow": semaphor["yellow"]["color"], "red": semaphor["red"]["color"]}
+    contents = (
+        (
+            "green", f"Питання: {question} ({g_elab})", f"Питання: {question}\nВідповідь({g_elab}): {str(answer[colors['green']])}"
+        ),
+        (
+            "yellow", f"Питання: {question} ({y_elab})", f"Питання: {question}\nВідповідь({y_elab}): {str(answer[colors['yellow']])}"
+        ),
+        (
+            "red", f"Питання: {question} ({r_elab})", f"Питання: {question}\nВідповідь({r_elab}): {str(answer[colors['red']])}"
+        ),
+    )
     return contents
 
 
 def get_semaphore(data: pd.DataFrame):
     return {
         "green": {
-            "color": data.columns[0], "elaboration": data.iloc[0][1]
+            "color": data.columns[2], "elaboration": str(data.iloc[0, 2])
             }
         ,
         "yellow": {
-            "color": data.columns[1], "elaboration": data.iloc[1][1]
+            "color": data.columns[3], "elaboration": str(data.iloc[0, 3])
             }
         ,
         "red": {
-            "color": data.columns[2], "elaboration": data.iloc[2][1]
+            "color": data.columns[4], "elaboration": str(data.iloc[0, 4])
         }
     }
 
