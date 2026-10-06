@@ -1,4 +1,5 @@
-from knowledge_base.questionary_uploader import open_store, load_excel_file
+from knowledge_base.profiling_uploader import load_excel_file
+from knowledge_base.connector import open_store, PLANS, ROLES
 from langchain_core.documents import Document
 import pandas as pd
 import uuid
@@ -22,7 +23,7 @@ def plan_answer(plans: dict, marker: str, row: pd.Series):
         contents.append((
             title,
             f"{marker} ({title})",
-            f"Критерій: {marker}\n{title} — {plan['timeframe']}: {str(value).strip()}",
+            f"{marker}\n{title}: {plan['timeframe']}: {str(value).strip()}",
         ))
     return tuple(contents)
 
@@ -46,7 +47,7 @@ def build_plan_document(candidate_id, file, name, marker, section, deadline, tit
 
 def insert_plan(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFrame):
     documents = []
-    store = open_store("Plans")
+    store = open_store(PLANS)
     markers = data.columns[1]
     deadline = str(markers).strip()
     plans = get_plans(data)
@@ -64,4 +65,24 @@ def insert_plan(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFram
             documents.append(build_plan_document(
                 candidate_id, file, name, marker, section, deadline, title, i, topic, page_content
             ))
+    store.add_documents(documents)
+
+
+def insert_roles(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFrame):
+    documents = []
+    store = open_store(ROLES)
+    roles = data.columns[3]
+
+    for role in data[roles].dropna().astype(str).str.strip().unique():
+        documents.append(
+            Document(
+                page_content=role,
+                metadata={
+                    "candidate_id": str(candidate_id),
+                    "file": os.path.basename(file),
+                    "sheet": name,
+                },
+                id=f"{candidate_id}|{name}|{role}",
+            )
+        )
     store.add_documents(documents)

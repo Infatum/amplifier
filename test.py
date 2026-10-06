@@ -1,5 +1,5 @@
-from knowledge_base.questionary_uploader import insert_semaphore, load_excel_file
-from knowledge_base.questionary_uploader import store_assignments
+from knowledge_base.profiling_uploader import insert_semaphore, load_excel_file
+from knowledge_base.profiling_uploader import store_assignments
 from knowledge_base.connector import local_model
 import uuid
 import os

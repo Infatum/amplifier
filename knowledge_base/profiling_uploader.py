@@ -1,4 +1,4 @@
-from knowledge_base.connector import connect, embeddings
+from knowledge_base.connector import open_store, PROFILING, SEMAPHORE
 from prompt_templates import assignment_answers_prompt
 from langchain_ollama.chat_models import ChatOllama
 from langchain_core.documents import Document
@@ -8,15 +8,6 @@ import pandas as pd
 import glob
 import uuid
 import os
-
-
-def open_store(collection_name: str) -> Chroma:
-    return Chroma(
-        client=connect(),
-        collection_name=collection_name,
-        embedding_function=embeddings,
-        collection_metadata={"hnsw:space": "cosine"},
-    )
 
 
 def load_excel_file(filepath: str):
@@ -68,7 +59,7 @@ def build_document(candidate_id: uuid.UUID, cell_id: int, file: str, name: str, 
 
 def insert_semaphore(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFrame) -> list[Document]:
     documents = []
-    store = open_store("Semaphore")
+    store = open_store(SEMAPHORE)
     semaphor = get_semaphore(data)
     answers = data.drop(columns=[name])
     
@@ -110,7 +101,7 @@ def get_semaphore(data: pd.DataFrame):
 def insert_profiling(
     candidate_id: uuid.UUID, file: str, name: str, question: str, data: pd.DataFrame, answers: Answers
 ):
-    store = open_store("Profiling")
+    store = open_store(PROFILING)
     for cell in answers.column:
         if cell.is_a_question:
             continue
