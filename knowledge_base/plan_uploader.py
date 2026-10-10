@@ -18,13 +18,13 @@ def plan_answer(plans: dict, marker: str, row: pd.Series):
     contents = []
     for title, plan in plans.items():
         value = row[plan["column"]]
-        if pd.isna(value):
-            continue
-        contents.append((
-            title,
-            f"{marker} ({title})",
-            f"{marker}\n{title}: {plan['timeframe']}: {str(value).strip()}",
-        ))
+        if not pd.isna(value):
+            contents.append((
+                title,
+                f"{marker} ({title})",
+                f"{marker}\n{title}: {plan['timeframe']}: {str(value).strip()}",
+            )
+        )
     return tuple(contents)
 
 
@@ -54,17 +54,16 @@ def insert_plan(candidate_id: uuid.UUID, file: str, name: str, data: pd.DataFram
     section = ""
 
     for i in range(len(data)):
-        if pd.isna(data.iloc[i][markers]):
-            continue
-        marker = str(data.iloc[i][markers]).strip()
-        contents = plan_answer(plans, marker, data.iloc[i])
-        if not contents:
-            section = marker
-            continue
-        for title, topic, page_content in contents:
-            documents.append(build_plan_document(
-                candidate_id, file, name, marker, section, deadline, title, i, topic, page_content
-            ))
+        if not pd.isna(data.iloc[i][markers]):
+            marker = str(data.iloc[i][markers]).strip()
+            contents = plan_answer(plans, marker, data.iloc[i])
+            if contents:
+                 for title, topic, page_content in contents:
+                    documents.append(build_plan_document(
+                        candidate_id, file, name, marker, section, deadline, title, i, topic, page_content)
+                )
+            else:
+                section = marker           
     store.add_documents(documents)
 
 

@@ -5,21 +5,18 @@ import chromadb
 import os
 
 load_dotenv()
-embeddings = OllamaEmbeddings(model="bge-m3")
+PLANS = "Plans"
+ROLES = "Roles"
+PROFILING = "Profiling"
+SEMAPHORE = "Semaphore"
+CURRICULUM_VITAE = "CurriculumVitae"
 local_model = os.environ.get("LOCAL_MODEL")
+embeddings = OllamaEmbeddings(model="bge-m3")
 
 
 def connect():
     chromadb_path = os.environ.get("CHROMADB_STORAGE", "./chroma_db")
     return chromadb.PersistentClient(path=chromadb_path)
-
-# Collection names live here so a typo is an ImportError, not a silently
-# created empty collection -- get_or_create_collection never complains.
-CURRICULUM_VITAE = "CurriculumVitae"
-PROFILING = "Profiling"
-SEMAPHORE = "Semaphore"
-PLANS = "Plans"
-ROLES = "Roles"
 
 
 def open_store(collection_name: str) -> Chroma:
