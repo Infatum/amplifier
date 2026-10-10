@@ -1,4 +1,3 @@
-from knowledge_base.profiling_uploader import load_excel_file
 from knowledge_base.connector import open_store, PLANS, ROLES
 from langchain_core.documents import Document
 import pandas as pd

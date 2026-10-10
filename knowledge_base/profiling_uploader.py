@@ -1,22 +1,13 @@
 from knowledge_base.connector import open_store, PROFILING, SEMAPHORE
+from knowledge_base.utils import load_excel_file
 from prompt_templates import assignment_answers_prompt
 from langchain_ollama.chat_models import ChatOllama
 from langchain_core.documents import Document
-from langchain_chroma import Chroma
 from entities import Answers
 import pandas as pd
 import glob
 import uuid
 import os
-
-
-def load_excel_file(filepath: str):
-    sheets = {}
-    with pd.ExcelFile(filepath) as xls:
-        for sheet_name in xls.sheet_names:
-            df = pd.read_excel(xls, sheet_name=sheet_name)
-            sheets[sheet_name] = df.reset_index()
-    return sheets
 
 
 def filter_answers(question: str, column: pd.Series, model: str, temperature=0.):
