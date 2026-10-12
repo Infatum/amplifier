@@ -5,10 +5,10 @@ import uuid
 import os
 
 
-def insert_cv(candidate_id: uuid.UUID, cv_file: str):
+def insert_cv(candidate_id: uuid.UUID, cv_file: str, resume_type: str="chronological"):
     store = open_store(CURRICULUM_VITAE)
     cv = PyMuPDF4LLMLoader(cv_file, mode="single", use_layout=False).load()
     for doc in cv:
-        doc.id = f"{candidate_id}|{os.path.basename(cv_file)}"
-        doc.metadata |= {"candidate_id": str(candidate_id)}
+        doc.id = f"{candidate_id}|{resume_type}|{os.path.basename(cv_file)}"
+        doc.metadata |= {"candidate_id": str(candidate_id), "resume_type": resume_type}
         store.add_documents(cv)

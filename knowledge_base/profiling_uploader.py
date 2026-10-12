@@ -1,7 +1,7 @@
 from knowledge_base.connector import open_store, PROFILING, SEMAPHORE
-from knowledge_base.utils import load_excel_file
 from prompt_templates import assignment_answers_prompt
 from langchain_ollama.chat_models import ChatOllama
+from knowledge_base.utils import load_excel_file
 from langchain_core.documents import Document
 from entities import Answers
 import pandas as pd
