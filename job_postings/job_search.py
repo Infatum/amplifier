@@ -4,12 +4,19 @@ from typing import Sequence
 import xml.etree.ElementTree as ET
 import urllib.request
 import sqlite3
+import json
 import pandas as pd
 import html
 import re
 
 JOBS_DB = "job_postings/jobs.db"
 DOU_FEED = "https://jobs.dou.ua/vacancies/feeds/"
+REMOTEOK_API = "https://remoteok.com/api"
+REMOTIVE_API = "https://remotive.com/api/remote-jobs"
+HIMALAYAS_API = "https://himalayas.app/jobs/api"
+NOMADS_API = "https://www.workingnomads.com/api/exposed_jobs/"
+WWR_FEED = "https://weworkremotely.com/remote-jobs.rss"
+ASHBY_BOARD = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 DOU_TITLE = re.compile(r"^(?P<title>.+?)\s+в\s+(?P<rest>.+)$") 
 
 
@@ -150,3 +157,178 @@ def save_jobs(jobs: pd.DataFrame, db_path: str = JOBS_DB, table: str = "jobs") -
         return len(rows)
     finally:
         connection.close()
+
+
+# --------------------------------------------------------------------------
+# Remote-only boards.
+#
+# Every posting on these is remote by definition, so is_remote is hardcoded
+# True rather than read from a field the source does not have. Columns match
+# load_jobs() output so every source concatenates into one table.
+# --------------------------------------------------------------------------
+
+BOARD_COLUMNS = (
+    "site", "id", "job_url", "title", "company", "location", "is_remote",
+    "min_amount", "max_amount", "currency", "interval", "job_type",
+    "date_posted", "description", "scraped_at",
+)
+
+
+def fetch_json(url: str):
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    return json.loads(urllib.request.urlopen(request, timeout=25).read().decode("utf-8", "replace"))
+
+
+def fetch_xml(url: str):
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    return ET.fromstring(urllib.request.urlopen(request, timeout=25).read())
+
+
+def board_frame(rows: list) -> pd.DataFrame:
+    """Same columns for every board, missing ones as None."""
+    return pd.DataFrame(rows, columns=list(BOARD_COLUMNS))
+
+
+def load_remoteok_jobs() -> pd.DataFrame:
+    scraped_at = get_timestamp()
+    # Element 0 is a legal notice, not a vacancy.
+    return board_frame([{
+        "site": "remoteok", "id": str(job.get("id", "")), "job_url": job.get("url"),
+        "title": job.get("position"), "company": job.get("company"),
+        "location": job.get("location"), "is_remote": True,
+        # RemoteOK writes 0 when no salary is given, not null -- keeping the
+        # zero would make "has a salary" true for 80 of 99 postings.
+        "min_amount": job.get("salary_min") or None,
+        "max_amount": job.get("salary_max") or None,
+        "currency": "USD" if job.get("salary_min") else None,
+        "interval": "yearly" if job.get("salary_min") else None,
+        "job_type": None, "date_posted": job.get("date"),
+        "description": job.get("description"), "scraped_at": scraped_at,
+    } for job in fetch_json(REMOTEOK_API)[1:]])
+
+
+def load_remotive_jobs(search: str | None = None) -> pd.DataFrame:
+    scraped_at = get_timestamp()
+    url = REMOTIVE_API + (f"?search={urllib.parse.quote(search)}" if search else "")
+    return board_frame([{
+        "site": "remotive", "id": str(job.get("id", "")), "job_url": job.get("url"),
+        "title": job.get("title"), "company": job.get("company_name"),
+        "location": job.get("candidate_required_location"), "is_remote": True,
+        "min_amount": None, "max_amount": None, "currency": None, "interval": None,
+        "job_type": job.get("job_type"), "date_posted": job.get("publication_date"),
+        "description": job.get("description"), "scraped_at": scraped_at,
+    } for job in fetch_json(url).get("jobs", [])])
+
+
+def load_himalayas_jobs(wanted: int = 100) -> pd.DataFrame:
+    """Himalayas caps a page at 20 whatever `limit` says, so follow nextCursor."""
+    scraped_at = get_timestamp()
+    jobs, cursor = [], None
+    while len(jobs) < wanted:
+        url = f"{HIMALAYAS_API}?limit=20"
+        if cursor:
+            url += f"&cursor={urllib.parse.quote(str(cursor))}"
+        payload = fetch_json(url)
+        page = payload.get("jobs", [])
+        if not page:
+            break
+        jobs.extend(page)
+        cursor = payload.get("nextCursor")
+        if not cursor:
+            break
+
+    rows = []
+    for job in jobs[:wanted]:
+        places = job.get("locationRestrictions") or []
+        rows.append({
+            "site": "himalayas", "id": str(job.get("guid", "")),
+            "job_url": job.get("applicationLink"), "title": job.get("title"),
+            "company": job.get("companyName"),
+            "location": ", ".join(places) if isinstance(places, list) else places,
+            "is_remote": True,
+            "min_amount": job.get("minSalary"), "max_amount": job.get("maxSalary"),
+            "currency": job.get("currency"), "interval": job.get("salaryPeriod"),
+            "job_type": job.get("employmentType"), "date_posted": job.get("pubDate"),
+            "description": job.get("description"), "scraped_at": scraped_at,
+        })
+    return board_frame(rows)
+
+
+def load_nomads_jobs() -> pd.DataFrame:
+    scraped_at = get_timestamp()
+    rows = []
+    for job in fetch_json(NOMADS_API):
+        url = job.get("url") or ""
+        rows.append({
+            "site": "workingnomads",
+            "id": url.split("?")[0].rstrip("/").split("/")[-1],
+            "job_url": url, "title": job.get("title"), "company": job.get("company_name"),
+            "location": job.get("location"), "is_remote": True,
+            "min_amount": None, "max_amount": None, "currency": None, "interval": None,
+            "job_type": None, "date_posted": job.get("pub_date"),
+            "description": job.get("description"), "scraped_at": scraped_at,
+        })
+    return board_frame(rows)
+
+
+def load_wwr_jobs() -> pd.DataFrame:
+    """We Work Remotely RSS. Titles read "Company: Role"."""
+    scraped_at = get_timestamp()
+    rows = []
+    for item in fetch_xml(WWR_FEED).findall(".//item"):
+        get = lambda tag: (item.findtext(tag) or "").strip()
+        raw = html.unescape(get("title"))
+        company, _, title = raw.partition(":")
+        link = get("link")
+        rows.append({
+            "site": "weworkremotely",
+            "id": link.split("?")[0].rstrip("/").split("/")[-1],
+            "job_url": link, "title": (title or raw).strip(), "company": company.strip(),
+            "location": ", ".join(p for p in (get("region"), get("country")) if p),
+            "is_remote": True,
+            "min_amount": None, "max_amount": None, "currency": None, "interval": None,
+            "job_type": get("type") or None, "date_posted": get("pubDate"),
+            "description": get("description"), "scraped_at": scraped_at,
+        })
+    return board_frame(rows)
+
+
+REMOTE_BOARDS = {
+    "remoteok": load_remoteok_jobs,
+    "remotive": load_remotive_jobs,
+    "himalayas": load_himalayas_jobs,
+    "workingnomads": load_nomads_jobs,
+    "weworkremotely": load_wwr_jobs,
+}
+
+
+def load_ashby_jobs(companies, remote_only: bool = True) -> pd.DataFrame:
+    """Postings straight from a company's own Ashby board.
+
+    Unlike the aggregators this is targeted: you pass the companies you care
+    about. Ashby reports isRemote itself, so the remote filter is exact here
+    rather than a guess -- no description sniffing needed.
+
+    A company not on Ashby returns no jobs instead of raising, so a wrong
+    slug is silent. Check the count when you add one.
+    """
+    scraped_at = get_timestamp()
+    rows = []
+    for company in companies:
+        try:
+            payload = fetch_json(ASHBY_BOARD.format(company=company))
+        except Exception:
+            continue
+        for job in payload.get("jobs", []):
+            if remote_only and not job.get("isRemote"):
+                continue
+            rows.append({
+                "site": f"ashby:{company}", "id": str(job.get("id", "")),
+                "job_url": job.get("jobUrl") or job.get("applyUrl"),
+                "title": job.get("title"), "company": company,
+                "location": job.get("location"), "is_remote": bool(job.get("isRemote")),
+                "min_amount": None, "max_amount": None, "currency": None, "interval": None,
+                "job_type": job.get("employmentType"), "date_posted": job.get("publishedAt"),
+                "description": job.get("descriptionPlain"), "scraped_at": scraped_at,
+            })
+    return board_frame(rows)
